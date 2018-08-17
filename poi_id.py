@@ -6,8 +6,21 @@ sys.path.append("../tools/")
 
 from feature_format import featureFormat, targetFeatureSplit
 from tester import dump_classifier_and_data
-from sklearn.tree import DecisionTreeClassifier
 import numpy as np
+import pandas as pd
+import matplotlib.pyplot
+from sklearn.feature_selection import SelectKBest
+from sklearn.feature_selection import f_classif, chi2
+from sklearn import metrics
+from sklearn.model_selection import GridSearchCV
+from sklearn.metrics import accuracy_score
+from sklearn.cross_validation import StratifiedShuffleSplit
+from sklearn.cross_validation import train_test_split
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.naive_bayes import GaussianNB
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.pipeline import Pipeline
+
 ### Task 1: Select what features you'll use.
 
 ### Load the dictionary containing the dataset
@@ -23,59 +36,23 @@ data = featureFormat(data_dict, fieldlist, sort_keys = True)
 
 ### describe the dataset brifely
 # the number of data points
-print len(data_dict), list(data_dict.keys())
+print len(data_dict)
 print len(fieldlist), fieldlist
 
 #how many POIs/non-POIs?
-poi_n, nonpoi_n = 0, 0
-for k in data_dict.iterkeys():
-    if data_dict[k]["poi"]==1:
-        poi_n = poi_n + 1
-    elif data_dict[k]["poi"]==0:
-        nonpoi_n = nonpoi_n + 1
-print "POIs", poi_n, "non-POIs", nonpoi_n
+df = pd.DataFrame(data_dict).T
+print "POI", df.poi.sum(), "non-POI", df.poi.count()-df.poi.sum()
 
 ### explore missing values
 #how many fokls have a quantified salary/known email address
-salary, email_address = 'salary', 'email_address'
-def getfilled(field):
-    count=0
-    for name in data_dict.keys():
-        if data_dict[name][field] != 'NaN':
-            count +=1
-    return count
-def getunfilled(field):
-    count=0
-    for name in data_dict.keys():
-        if data_dict[name][field] == 'NaN':
-            count +=1
-    return count
-print "number of quantified salaries", getfilled(salary)
-print "number of known email address", getfilled(email_address)
-
+df.replace("NaN",np.nan, inplace = True)
 for field in fieldlist:
-    print "number of filled data points for", field, getfilled(field)
+    print "Not missing", field, df.eval(field).count()
 
 ### Task 2: Remove outliers
-### read in data dictionary, convert to numpy array
-
-def getmissing_datapoint(fieldlist):
-    missing_datapoint = []
-    for name in data_dict.keys():
-        count = 0
-        for field in fieldlist:
-            if data_dict[name][field] == 'NaN':
-                count +=1
-        if count >= 20:
-            missing_datapoint.append(name)
-    print missing_datapoint
-
-getmissing_datapoint(fieldlist)
 
 # 'LOCKHART EUGENE E' is a missing datapoint,
 # also 'THE TRAVEL AGENCY IN THE PARK' is not somebody's name.
-
-import matplotlib.pyplot
 
 data_dict.pop( "TOTAL", 0 )
 data_dict.pop('LOCKHART EUGENE E', 0)
@@ -116,12 +93,6 @@ my_dataset = featureFormat(data_dict, fieldlist, sort_keys = True)
 labels, features = targetFeatureSplit(my_dataset)
 
 ### Use SelectKBest to automatically select features
-from sklearn.feature_selection import SelectKBest
-from sklearn.feature_selection import f_classif
-from sklearn import metrics
-from sklearn.grid_search import GridSearchCV
-from sklearn.metrics import accuracy_score
-from sklearn.cross_validation import StratifiedShuffleSplit
 
 print len(features[1])
 select_f = SelectKBest(f_classif, k=10).fit(features, labels)
@@ -139,13 +110,11 @@ for ele in sortby_score:
 ### features_list is a list of strings, each of which is a feature name.
 ### The first feature must be "poi".
 
-features_list = ['poi', 'total_stock_value', 'bonus', 'salary', 'propotion_to_poi', 'exercised_stock_options'] # You will need to use more features
-
 ### Store to my_dataset for easy export below.
 my_dataset = data_dict
 
 ### Extract features and labels from dataset for local testing
-data = featureFormat(data_dict, features_list, sort_keys = True)
+data = featureFormat(data_dict, fieldlist, sort_keys = True)
 labels, features = targetFeatureSplit(data)
 
 ### Task 4: Try a varity of classifiers
@@ -155,6 +124,7 @@ labels, features = targetFeatureSplit(data)
 ### http://scikit-learn.org/stable/modules/pipeline.html
 
 # Provided to give you a starting point. Try a variety of classifiers.
+'''
 def get_model_results(clf, features_train, labels_train, features_test, labels_test):
     clf.fit(features_train, labels_train)
     prediction = clf.predict(features_test)
@@ -162,21 +132,18 @@ def get_model_results(clf, features_train, labels_train, features_test, labels_t
     print "recall", metrics.recall_score(labels_test, prediction)
     print "f1_score", metrics.f1_score(labels_test, prediction)
 
-from sklearn.cross_validation import train_test_split
 features_train, features_test, labels_train, labels_test = \
     train_test_split(features, labels, test_size=0.3, random_state=42)
-
-'''
-from sklearn.naive_bayes import GaussianNB
 clf = GaussianNB()
 get_model_results(clf, features_train, labels_train, features_test, labels_test)
 '''
+
 '''
 clf = DecisionTreeClassifier()
 get_model_results(clf, features_train, labels_train, features_test, labels_test)
 '''
+
 '''
-from sklearn.ensemble import RandomForestClassifier
 clf = RandomForestClassifier()
 get_model_results(clf, features_train, labels_train, features_test, labels_test)
 '''
@@ -189,48 +156,35 @@ get_model_results(clf, features_train, labels_train, features_test, labels_test)
 ### http://scikit-learn.org/stable/modules/generated/sklearn.cross_validation.StratifiedShuffleSplit.html
 
 # Example starting point. Try investigating other evaluation techniques!
-'''
-parameters = {'criterion':('gini', 'entropy'), 'max_features':(2,3,4,5,None),\
-                'min_samples_split':(2,3,4,5), 'max_depth':(2,3,4,5,6,7,8,9,10,None)}
+
+parameters = {'anova__k':(2,3,4,5,6,7,8,9,10),
+                'dtree__criterion':('gini', 'entropy'),
+                'dtree__min_samples_leaf':(1,2,3,4,5),
+                'dtree__min_samples_split':(2,3,4,5),
+                'dtree__max_depth':(2,3,4,5,None)}
 dtree = DecisionTreeClassifier()
 
-clf = GridSearchCV(dtree, parameters)
-get_model_results(clf, features_train, labels_train, features_test, labels_test)
-print clf.best_estimator_
-'''
+cv = StratifiedShuffleSplit(labels, 1000, test_size=0.3, random_state=42)
+anova_filter = SelectKBest()
+dtree = DecisionTreeClassifier(f_classif)
+
+Pipe = Pipeline([('anova', anova_filter),('dtree',dtree)])
+#Pipe.set_params(anova_k=10,dtree_min_samples_split=2)
+
+#score_list = ['precision', 'recall', 'f1']
+grid = GridSearchCV(Pipe, parameters, cv=cv, scoring='recall', n_jobs=2)
+grid.fit(features, labels)
+print grid.best_estimator_
+print grid.best_score_
+
+features_list = ['poi', ]
+for i in range(len(fieldlist)-1):
+    if grid.best_estimator_.named_steps['anova'].get_support()[i] == True:
+        features_list.append(fieldlist[i+1])
 
 #the final classifier after autotuned:
-clf = DecisionTreeClassifier(criterion='gini', max_features=2, min_samples_split=2, max_depth=2)
+clf = grid.best_estimator_
 
-'''
-#cross validation
-cv = StratifiedShuffleSplit(labels, 1000, random_state = 42)
-feature_importances = np.zeros(len(features_list)-1)
-precision = []
-recall = []
-f1 = []
-for train_index, test_index in cv:
-    features_train = []
-    features_test  = []
-    labels_train   = []
-    labels_test    = []
-    for i in train_index:
-        features_train.append(features[i])
-        labels_train.append(labels[i])
-    for j in test_index:
-        features_test.append(features[j])
-        labels_test.append(labels[j])
-    clf.fit(features_train, labels_train)
-    pred = clf.predict(features_test)
-    precision.append (metrics.precision_score(labels_test, pred))
-    recall.append( metrics.recall_score(labels_test, pred))
-    f1.append( metrics.f1_score(labels_test, pred))
-    feature_importances = feature_importances + np.array(clf.feature_importances_)
-mean_feature_importances = feature_importances / 1000
-print 'Mean feature importances:'
-print sorted(zip(map(lambda x: round(x, 4), mean_feature_importances), features_list[1:]), reverse=True)
-print 'precision: %f, recall: %f, f1: %f' %(np.mean(precision), np.mean(recall), np.mean(f1))
-'''
 ### Task 6: Dump your classifier, dataset, and features_list so anyone can
 ### check your results. You do not need to change anything below, but make sure
 ### that the version of poi_id.py that you submit can be run on its own and
