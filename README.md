@@ -1,2 +1,2 @@
-# P6_Identify_Fraud_From_Enron_Emails
-Udacity Data Analyst Nano Degree Projects 6
+# P5_Identify_Fraud_From_Enron_Emails
+Udacity Data Analyst Nano Degree Projects 5
